@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>時計・ストップウォッチ・タイマー</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f5f5f7;--card:#fff;--text:#1d1d1f;--muted:#86868b;--accent:#0a84ff;--stop:#ff453a;--ok:#30d158;--border:#e5e5ea}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#111113;--card:#1c1c1e;--text:#f5f5f7;--muted:#8e8e93;--border:#2c2c2e}}
+:root[data-theme="dark"]{--bg:#111113;--card:#1c1c1e;--text:#f5f5f7;--muted:#8e8e93;--border:#2c2c2e}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;min-height:100vh;display:flex;justify-content:center;padding:20px 16px}
+main{width:100%;max-width:440px}
+.tabs{display:flex;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:4px;margin-bottom:20px}
+.tabs button{flex:1;padding:10px;border:0;border-radius:10px;background:none;color:var(--muted);font-size:15px;font-weight:600;cursor:pointer}
+.tabs button.on{background:var(--accent);color:#fff}
+.panel{display:none}.panel.on{display:block}
+.display{background:var(--card);border-radius:24px;padding:36px 12px;text-align:center;font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:clamp(38px,12vw,54px);font-weight:600;border:1px solid var(--border)}
+.display small{font-size:.6em;color:var(--muted)}
+.date{color:var(--muted);font-size:15px;margin-top:8px;font-family:-apple-system,"Hiragino Sans",sans-serif;font-weight:400}
+.controls{display:flex;gap:12px;margin:18px 0}
+button.b{flex:1;padding:16px;border:0;border-radius:16px;font-size:17px;font-weight:600;cursor:pointer;color:#fff;background:var(--accent)}
+button.b:active{transform:scale(.97)}
+button.b.stop{background:var(--stop)}
+button.b.sub{background:var(--card);color:var(--text);border:1px solid var(--border)}
+button.b:disabled{opacity:.4;cursor:default}
+.list{background:var(--card);border-radius:16px;border:1px solid var(--border);max-height:300px;overflow-y:auto}
+.row{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+.row:last-child{border-bottom:0}
+.row .l{color:var(--muted);font-size:14px}.row .v{font-weight:600}
+.lap{display:grid;grid-template-columns:44px 1fr 1fr;padding:12px 16px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums;font-size:15px}
+.lap:last-child{border-bottom:0}.lap span:first-child{color:var(--muted)}.lap span:nth-child(2){text-align:center}.lap span:last-child{text-align:right;font-weight:600}
+.lap.best span:nth-child(2){color:var(--ok)}.lap.worst span:nth-child(2){color:var(--stop)}
+.empty{padding:20px;text-align:center;color:var(--muted);font-size:14px}
+.inputs{display:flex;gap:8px;justify-content:center;align-items:center}
+.inputs label{display:flex;flex-direction:column;align-items:center;color:var(--muted);font-size:12px;gap:4px}
+.inputs input{width:84px;padding:14px 4px;font-size:30px;text-align:center;border-radius:14px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:ui-monospace,Menlo,monospace}
+.presets{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;justify-content:center}
+.presets button{padding:8px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;cursor:pointer}
+.bar{height:6px;background:var(--border);border-radius:3px;margin-top:16px;overflow:hidden}
+.bar div{height:100%;width:0;background:var(--accent);transition:width .2s linear}
+.done{color:var(--stop)}
+.hint{text-align:center;color:var(--muted);font-size:12px;margin-top:16px}
+</style>
+</head>
+<body>
+<main>
+<div class="tabs" id="tabs">
+  <button data-t="clock" class="on">時計</button>
+  <button data-t="sw">ストップウォッチ</button>
+  <button data-t="tm">タイマー</button>
+</div>
+
+<section class="panel on" id="clock">
+  <div class="display"><div id="ctime">--:--:--</div><div class="date" id="cdate"></div></div>
+  <div class="list" id="world" style="margin-top:18px"></div>
+</section>
+
+<section class="panel" id="sw">
+  <div class="display" id="swd">00:00<small>.00</small></div>
+  <div class="controls"><button class="b sub" id="lapBtn" disabled>ラップ</button><button class="b" id="swBtn">スタート</button></div>
+  <div class="list" id="laps"><div class="empty">ラップはまだありません</div></div>
+  <p class="hint">スペース:開始/停止 ・ L:ラップ ・ R:リセット</p>
+</section>
+
+<section class="panel" id="tm">
+  <div class="display">
+    <div id="tmd" style="display:none">00:05:00</div>
+    <div class="inputs" id="tin">
+      <label>時間<input id="th" type="number" min="0" max="99" value="0" inputmode="numeric"></label>
+      <label>分<input id="tmi" type="number" min="0" max="59" value="5" inputmode="numeric"></label>
+      <label>秒<input id="ts" type="number" min="0" max="59" value="0" inputmode="numeric"></label>
+    </div>
+    <div class="bar"><div id="bar"></div></div>
+  </div>
+  <div class="presets" id="presets">
+    <button data-s="60">1分</button><button data-s="180">3分</button><button data-s="300">5分</button><button data-s="600">10分</button><button data-s="1500">25分</button>
+  </div>
+  <div class="controls"><button class="b sub" id="tReset">リセット</button><button class="b" id="tBtn">スタート</button></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id),p2=n=>String(n).padStart(2,'0');
+// タブ
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.toggle('on',x.id===b.dataset.t));
+});
+// 時計
+const zones=[['東京','Asia/Tokyo'],['ニューヨーク','America/New_York'],['ロンドン','Europe/London'],['パリ','Europe/Paris'],['シドニー','Australia/Sydney']];
+function clock(){
+  const n=new Date();
+  $('ctime').textContent=`${p2(n.getHours())}:${p2(n.getMinutes())}:${p2(n.getSeconds())}`;
+  $('cdate').textContent=n.toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  $('world').innerHTML=zones.map(([nm,z])=>{
+    const t=n.toLocaleTimeString('ja-JP',{timeZone:z,hour:'2-digit',minute:'2-digit',hour12:false});
+    const d=n.toLocaleDateString('ja-JP',{timeZone:z,month:'numeric',day:'numeric',weekday:'short'});
+    return `<div class="row"><span class="l">${nm} ・ ${d}</span><span class="v">${t}</span></div>`;
+  }).join('');
+}
+clock();setInterval(clock,1000);
+// ストップウォッチ
+const fmt=ms=>{const cs=Math.floor(ms/10)%100,s=Math.floor(ms/1000)%60,m=Math.floor(ms/60000)%60,h=Math.floor(ms/3600000);return(h?h+':':'')+p2(m)+':'+p2(s)+'.'+p2(cs)};
+let sRun=false,sStart=0,sEl=0,sLast=0,sRaf,laps=[];
+const swr=ms=>{const t=fmt(ms),i=t.lastIndexOf('.');$('swd').innerHTML=t.slice(0,i)+'<small>'+t.slice(i)+'</small>'};
+const swTick=()=>{swr(sEl+performance.now()-sStart);sRaf=requestAnimationFrame(swTick)};
+function swToggle(){
+  if(sRun){sEl+=performance.now()-sStart;cancelAnimationFrame(sRaf);sRun=false;$('swBtn').textContent='再開';$('swBtn').classList.remove('stop');$('lapBtn').textContent='リセット';swr(sEl)}
+  else{sStart=performance.now();sRun=true;$('swBtn').textContent='ストップ';$('swBtn').classList.add('stop');$('lapBtn').textContent='ラップ';$('lapBtn').disabled=false;swTick()}
+}
+function swLap(){
+  if(sRun){const t=sEl+performance.now()-sStart;laps.unshift({t,s:t-sLast});sLast=t}
+  else{sEl=0;sLast=0;laps=[];swr(0);$('lapBtn').textContent='ラップ';$('lapBtn').disabled=true;$('swBtn').textContent='スタート'}
+  const L=$('laps');
+  if(!laps.length){L.innerHTML='<div class="empty">ラップはまだありません</div>';return}
+  const b=Math.min(...laps.map(l=>l.s)),w=Math.max(...laps.map(l=>l.s));
+  L.innerHTML=laps.map((l,i)=>`<div class="lap ${laps.length>1?(l.s===b?'best':l.s===w?'worst':''):''}"><span>${laps.length-i}</span><span>${fmt(l.s)}</span><span>${fmt(l.t)}</span></div>`).join('');
+}
+$('swBtn').onclick=swToggle;$('lapBtn').onclick=swLap;
+// タイマー
+let tRun=false,tEnd=0,tTotal=0,tLeft=0,tInt;
+const tfmt=s=>`${p2(Math.floor(s/3600))}:${p2(Math.floor(s/60)%60)}:${p2(s%60)}`;
+const getIn=()=>(+$('th').value||0)*3600+(+$('tmi').value||0)*60+(+$('ts').value||0);
+function setIn(s){$('th').value=Math.floor(s/3600);$('tmi').value=Math.floor(s/60)%60;$('ts').value=s%60}
+function beep(){
+  try{const c=new (window.AudioContext||window.webkitAudioContext)();
+  [0,.35,.7].forEach(d=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=880;o.connect(g);g.connect(c.destination);g.gain.setValueAtTime(.2,c.currentTime+d);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+d+.25);o.start(c.currentTime+d);o.stop(c.currentTime+d+.25)})}catch(e){}
+  if(navigator.vibrate)navigator.vibrate([200,100,200]);
+}
+function showT(show){$('tmd').style.display=show?'block':'none';$('tin').style.display=show?'none':'flex'}
+function tTick(){
+  tLeft=Math.max(0,Math.ceil((tEnd-Date.now())/1000));
+  $('tmd').textContent=tfmt(tLeft);
+  $('bar').style.width=(tTotal?100*(1-tLeft/tTotal):0)+'%';
+  document.title=tfmt(tLeft)+' - タイマー';
+  if(tLeft<=0){clearInterval(tInt);tRun=false;$('tmd').classList.add('done');$('tBtn').textContent='スタート';$('tBtn').classList.remove('stop');beep();document.title='時間です!'}
+}
+$('tBtn').onclick=()=>{
+  if(tRun){clearInterval(tInt);tRun=false;$('tBtn').textContent='再開';$('tBtn').classList.remove('stop');return}
+  if(!tLeft||$('tmd').classList.contains('done')){tLeft=getIn();tTotal=tLeft;if(!tLeft)return}
+  $('tmd').classList.remove('done');showT(true);
+  tEnd=Date.now()+tLeft*1000;tRun=true;$('tBtn').textContent='一時停止';$('tBtn').classList.add('stop');
+  tTick();tInt=setInterval(tTick,200);
+};
+$('tReset').onclick=()=>{clearInterval(tInt);tRun=false;tLeft=0;tTotal=0;$('tmd').classList.remove('done');showT(false);$('bar').style.width='0';$('tBtn').textContent='スタート';$('tBtn').classList.remove('stop');document.title='時計・ストップウォッチ・タイマー'};
+$('presets').onclick=e=>{const s=e.target.dataset.s;if(s){$('tReset').onclick();setIn(+s)}};
+document.addEventListener('keydown',e=>{
+  if(!$('sw').classList.contains('on')||e.target.tagName==='INPUT')return;
+  if(e.code==='Space'){e.preventDefault();swToggle()}
+  else if(e.key.toLowerCase()==='l'&&sRun)swLap();
+  else if(e.key.toLowerCase()==='r'&&!sRun)swLap();
+});
+</script>
+</body>
+</html>
